@@ -3,24 +3,15 @@ import polars as pl
 import duckdb
 import os
 
-from dotenv import load_dotenv
-load_dotenv()
-
 # Import core modules
-# Import core modules from the local folder context
-import parser
-import agent
-import pipeline
-
-# Extract the required pipeline entry-point execution methods
-extract_text_from_pdf = parser.extract_text_from_pdf
-extract_structured_data_from_text = agent.extract_structured_data_from_text
-process_extracted_invoice_to_table = pipeline.process_extracted_invoice_to_table
+from parser import extract_text_from_pdf
+from agent import extract_structured_data_from_text
+from pipeline import process_extracted_invoice_to_table
 
 st.set_page_config(page_title="Enterprise Invoice Ingestion MVP", layout="wide")
 
 st.title("📑 AI Document Ingestion & Audit Platform")
-st.subheader("Dashboard — Human-in-the-Loop Review Console")
+st.subheader("3-Week MVP Dashboard — Human-in-the-Loop Review Console")
 st.markdown("---")
 
 db_path = os.path.join("data", "invoice_warehouse.db")
@@ -62,28 +53,20 @@ uploaded_files = st.sidebar.file_uploader(
 
 if uploaded_files:
     if st.sidebar.button("🚀 Process Uploaded Files", use_container_width=True):
+        os.makedirs(upload_dir, exist_ok=True)
         
-        # Pulls the operating system's native open writable temp folder space
-        import tempfile
-        upload_dir = tempfile.gettempdir()
-        
+        # CLEAR previous session history so the view refreshes to blank for this new run
         new_batch_list = []
         
         for uploaded_file in uploaded_files:
-            # Generate a stable absolute file path for the parser to consume
             target_path = os.path.join(upload_dir, uploaded_file.name)
-            
-            # Flush browser buffer into the safe filesystem path
             with open(target_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
                 
             st.sidebar.info(f"Analyzing {uploaded_file.name}...")
             
             try:
-                # Runs your exact original dictionary-returning pipeline function safely!
                 parsed_doc = extract_text_from_pdf(target_path)
-                
-                # Passes the exact structural raw content key string down to the LLM agent
                 extracted_json = extract_structured_data_from_text(parsed_doc["raw_content"])
                 
                 if extracted_json and extracted_json.get("line_items"):
@@ -94,21 +77,19 @@ if uploaded_files:
                         pl.lit("").alias("auditor_notes")
                     ])
                     
-                    # Sync and merge records inside DuckDB ledger indices
+                    # Deduplicate: Remove previous logs of this file from the DB before re-inserting
                     conn.execute("DELETE FROM invoice_ledger WHERE source_filename = ?", (uploaded_file.name,))
-                    conn.execute("INSERT INTO invoice_ledger SELECT * FROM invoice_df")
                     
+                    # Append rows directly to the database
+                    conn.execute("INSERT INTO invoice_ledger SELECT * FROM invoice_df")
                     new_batch_list.append(uploaded_file.name)
                     st.sidebar.success(f"✅ Ingested: {uploaded_file.name}")
                 else:
                     st.sidebar.error(f"❌ Extraction error on: {uploaded_file.name}")
             except Exception as e:
                 st.sidebar.error(f"⚠️ Pipeline fault: {str(e)}")
-            finally:
-                # Housekeeping: clear file path lock to keep space usage clean
-                if os.path.exists(target_path):
-                    os.remove(target_path)
         
+        # Commit the names of only the freshly processed files to the view state memory
         st.session_state.current_batch_files = new_batch_list
         st.rerun()
 
@@ -150,7 +131,7 @@ col3.metric("Unresolved Audit Anomalies", f"{anomaly_invoice_count} Flags",
 st.markdown("### 📋 Current Batch Processing Workspace")
 
 if not query_df.is_empty():
-    st.dataframe(query_df.to_pandas(), width='stretch', hide_index=True)
+    st.dataframe(query_df.to_pandas(), use_container_width=True, hide_index=True)
     
     # --- HUMAN-IN-THE-LOOP SIDEBAR CONTROLLER ---
     st.sidebar.markdown("---")
@@ -166,7 +147,7 @@ if not query_df.is_empty():
         st.sidebar.error(f"**Vendor:** {vendor}\n\nInvoice contains arithmetic discrepancies.")
         auditor_notes = st.sidebar.text_input("Auditor Override Justification Notes:", "Approved by procurement.")
         
-        if st.sidebar.button("✍️ Clear Anomaly & Force Approve Payment", width='stretch'):
+        if st.sidebar.button("✍️ Clear Anomaly & Force Approve Payment", use_container_width=True):
             conn.execute("""
                 UPDATE invoice_ledger 
                 SET review_status = 'Approved via Override',

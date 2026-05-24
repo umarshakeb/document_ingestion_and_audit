@@ -36,7 +36,6 @@ def extract_structured_data_from_text(raw_text: str) -> dict:
     
     metadata_prompt = (
         "You are an expert data extractor. Extract the general invoice details from the text.\n"
-        "Look closely at the bottom of tables or text sections to find the explicitly stated Subtotal or Total amount.\n"
         "Respond with ONLY a JSON object matching this sample structure:\n"
         "{\n"
         '  "invoice_id": "STRING",\n'
