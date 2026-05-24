@@ -63,17 +63,27 @@ uploaded_files = st.sidebar.file_uploader(
 if uploaded_files:
     if st.sidebar.button("🚀 Process Uploaded Files", use_container_width=True):
         
-        # Reset session state tracking for this new run
+        # Pulls the operating system's native open writable temp folder space
+        import tempfile
+        upload_dir = tempfile.gettempdir()
+        
         new_batch_list = []
         
         for uploaded_file in uploaded_files:
+            # Generate a stable absolute file path for the parser to consume
+            target_path = os.path.join(upload_dir, uploaded_file.name)
+            
+            # Flush browser buffer into the safe filesystem path
+            with open(target_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+                
             st.sidebar.info(f"Analyzing {uploaded_file.name}...")
             
             try:
-                # --- CHIP IN-MEMORY FILE STREAM DIRECTLY ---
-                # Pass the raw Streamlit UploadedFile buffer directly into the parser
-                parsed_doc = extract_text_from_pdf(uploaded_file) 
+                # Runs your exact original dictionary-returning pipeline function safely!
+                parsed_doc = extract_text_from_pdf(target_path)
                 
+                # Passes the exact structural raw content key string down to the LLM agent
                 extracted_json = extract_structured_data_from_text(parsed_doc["raw_content"])
                 
                 if extracted_json and extracted_json.get("line_items"):
@@ -84,7 +94,7 @@ if uploaded_files:
                         pl.lit("").alias("auditor_notes")
                     ])
                     
-                    # Manage database transaction states seamlessly
+                    # Sync and merge records inside DuckDB ledger indices
                     conn.execute("DELETE FROM invoice_ledger WHERE source_filename = ?", (uploaded_file.name,))
                     conn.execute("INSERT INTO invoice_ledger SELECT * FROM invoice_df")
                     
@@ -94,6 +104,10 @@ if uploaded_files:
                     st.sidebar.error(f"❌ Extraction error on: {uploaded_file.name}")
             except Exception as e:
                 st.sidebar.error(f"⚠️ Pipeline fault: {str(e)}")
+            finally:
+                # Housekeeping: clear file path lock to keep space usage clean
+                if os.path.exists(target_path):
+                    os.remove(target_path)
         
         st.session_state.current_batch_files = new_batch_list
         st.rerun()

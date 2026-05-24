@@ -1,23 +1,30 @@
 import os
 from pypdf import PdfReader
-import io
 
-def extract_text_from_pdf(file_target) -> dict:
+def extract_text_from_pdf(pdf_path):
     """
-    Extracts raw text payload matrix from a file path or an active in-memory binary stream.
+    Reads a PDF file and extracts raw text string contents along with basic metadata.
     """
-    # If it's a file path string, open it; if it's already an uploaded file buffer object, read it directly
-    if isinstance(file_target, str):
-        with open(file_target, "rb") as f:
-            reader = pypdf.PdfReader(f)
-            text_content = "".join([page.extract_text() for page in reader.pages])
-    else:
-        # Streamlit upload streams act like raw byte payloads natively
-        pdf_stream = io.BytesIO(file_target.read())
-        reader = pypdf.PdfReader(pdf_stream)
-        text_content = "".join([page.extract_text() for page in reader.pages])
+    if not os.path.exists(pdf_path):
+        raise FileNotFoundError(f"Target PDF file not found at: {pdf_path}")
         
-    return {"raw_content": text_content}
+    reader = PdfReader(pdf_path)
+    extracted_pages = []
+    
+    for page_num, page in enumerate(reader.pages):
+        text = page.extract_text()
+        if text:
+            extracted_pages.append(text)
+            
+    # Combine pages into a single payload structural string block
+    full_text = "\n--- PAGE BREAK ---\n".join(extracted_pages)
+    
+    return {
+        "file_name": os.path.basename(pdf_path),
+        "file_path": pdf_path,
+        "total_pages": len(reader.pages),
+        "raw_content": full_text
+    }
 
 if __name__ == "__main__":
     # Test our parser locally against invoice_mock_01.pdf
