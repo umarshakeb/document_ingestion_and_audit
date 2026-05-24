@@ -11,7 +11,7 @@ from pipeline import process_extracted_invoice_to_table
 st.set_page_config(page_title="Enterprise Invoice Ingestion MVP", layout="wide")
 
 st.title("📑 AI Document Ingestion & Audit Platform")
-st.subheader("3-Week MVP Dashboard — Human-in-the-Loop Review Console")
+st.subheader("Dashboard — Human-in-the-Loop Console")
 st.markdown("---")
 
 db_path = os.path.join("data", "invoice_warehouse.db")
