@@ -34,8 +34,20 @@ def extract_structured_data_from_text(raw_text: str) -> dict:
     # We use Llama 3.3 70B on Groq for state-of-the-art accuracy
     target_model = "llama-3.3-70b-versatile"
     
+    # metadata_prompt = (
+    #     "You are an expert data extractor. Extract the general invoice details from the text.\n"
+    #     "Respond with ONLY a JSON object matching this sample structure:\n"
+    #     "{\n"
+    #     '  "invoice_id": "STRING",\n'
+    #     '  "vendor_name": "STRING",\n'
+    #     '  "invoice_date": "YYYY-MM-DD",\n'
+    #     '  "po_reference": "STRING",\n'
+    #     '  "declared_subtotal": 0.0\n'
+    #     "}"
+    # )
     metadata_prompt = (
         "You are an expert data extractor. Extract the general invoice details from the text.\n"
+        "CRITICAL: Extract values exactly as they are printed on the document. Do not perform any mathematical corrections.\n"
         "Respond with ONLY a JSON object matching this sample structure:\n"
         "{\n"
         '  "invoice_id": "STRING",\n'
@@ -46,8 +58,25 @@ def extract_structured_data_from_text(raw_text: str) -> dict:
         "}"
     )
     
+    # line_items_prompt = (
+    #     "You are an expert data extractor. Extract all line items listed inside tables within the text.\n"
+    #     "Respond with ONLY a JSON object matching this sample structure:\n"
+    #     "{\n"
+    #     '  "line_items": [\n'
+    #     "    {\n"
+    #     '      "item_code": "STRING",\n'
+    #     '      "description": "STRING",\n'
+    #     '      "quantity": 0,\n'
+    #     '      "unit_price": 0.0,\n'
+    #     '      "total_amount": 0.0\n'
+    #     "    }\n"
+    #     "  ]\n"
+    #     "}"
+    # )
     line_items_prompt = (
         "You are an expert data extractor. Extract all line items listed inside tables within the text.\n"
+        "CRITICAL FOR AUDITING: For the 'total_amount' field, extract the raw number EXACTLY as it is written on the page.\n"
+        "Do NOT recalculate or correct the math. If the line states quantity is 5, rate is 500, but amount says 1500.00, your 'total_amount' MUST be 1500.00.\n"
         "Respond with ONLY a JSON object matching this sample structure:\n"
         "{\n"
         '  "line_items": [\n'

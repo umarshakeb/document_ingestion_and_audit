@@ -23,6 +23,27 @@ def process_extracted_invoice_to_table(extracted_json: dict) -> pl.DataFrame:
     # Flatten the JSON list into a flat list of dictionaries for tabular loading
     flattened_rows = []
     for item in line_items_list:
+        # row = {
+        #     "invoice_id": invoice_id,
+        #     "vendor_name": vendor_name,
+        #     "invoice_date": invoice_date,
+        #     "po_reference": po_ref,
+        #     "item_code": item.get("item_code", "").strip(),
+        #     "description": item.get("description", ""),
+        #     "quantity": int(item.get("quantity", 0)),
+        #     "unit_price": float(item.get("unit_price", 0.0)),
+        #     "extracted_total": float(item.get("total_amount", 0.0))
+        # }
+        # flattened_rows.append(row)
+        raw_qty = item.get("quantity", 0)
+        raw_price = item.get("unit_price", 0.0)
+        raw_total = item.get("total_amount", 0.0)
+        
+        # Clean potential string representations coming out of the LLM envelope
+        qty = int(float(str(raw_qty).replace(",", ""))) if raw_qty else 0
+        price = float(str(raw_price).replace(",", "")) if raw_price else 0.0
+        extracted_total = float(str(raw_total).replace(",", "")) if raw_total else 0.0
+
         row = {
             "invoice_id": invoice_id,
             "vendor_name": vendor_name,
@@ -30,9 +51,9 @@ def process_extracted_invoice_to_table(extracted_json: dict) -> pl.DataFrame:
             "po_reference": po_ref,
             "item_code": item.get("item_code", "").strip(),
             "description": item.get("description", ""),
-            "quantity": int(item.get("quantity", 0)),
-            "unit_price": float(item.get("unit_price", 0.0)),
-            "extracted_total": float(item.get("total_amount", 0.0))
+            "quantity": qty,
+            "unit_price": price,
+            "extracted_total": extracted_total
         }
         flattened_rows.append(row)
         
