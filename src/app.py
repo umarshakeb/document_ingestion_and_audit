@@ -61,21 +61,19 @@ uploaded_files = st.sidebar.file_uploader(
 )
 
 if uploaded_files:
-    if st.sidebar.button("🚀 Process Uploaded Files", width='stretch'):
-        os.makedirs(upload_dir, exist_ok=True)
+    if st.sidebar.button("🚀 Process Uploaded Files", use_container_width=True):
         
-        # CLEAR previous session history so the view refreshes to blank for this new run
+        # Reset session state tracking for this new run
         new_batch_list = []
         
         for uploaded_file in uploaded_files:
-            target_path = os.path.join(upload_dir, uploaded_file.name)
-            with open(target_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-                
             st.sidebar.info(f"Analyzing {uploaded_file.name}...")
             
             try:
-                parsed_doc = extract_text_from_pdf(target_path)
+                # --- CHIP IN-MEMORY FILE STREAM DIRECTLY ---
+                # Pass the raw Streamlit UploadedFile buffer directly into the parser
+                parsed_doc = extract_text_from_pdf(uploaded_file) 
+                
                 extracted_json = extract_structured_data_from_text(parsed_doc["raw_content"])
                 
                 if extracted_json and extracted_json.get("line_items"):
@@ -86,11 +84,10 @@ if uploaded_files:
                         pl.lit("").alias("auditor_notes")
                     ])
                     
-                    # Deduplicate: Remove previous logs of this file from the DB before re-inserting
+                    # Manage database transaction states seamlessly
                     conn.execute("DELETE FROM invoice_ledger WHERE source_filename = ?", (uploaded_file.name,))
-                    
-                    # Append rows directly to the database
                     conn.execute("INSERT INTO invoice_ledger SELECT * FROM invoice_df")
+                    
                     new_batch_list.append(uploaded_file.name)
                     st.sidebar.success(f"✅ Ingested: {uploaded_file.name}")
                 else:
@@ -98,7 +95,6 @@ if uploaded_files:
             except Exception as e:
                 st.sidebar.error(f"⚠️ Pipeline fault: {str(e)}")
         
-        # Commit the names of only the freshly processed files to the view state memory
         st.session_state.current_batch_files = new_batch_list
         st.rerun()
 
