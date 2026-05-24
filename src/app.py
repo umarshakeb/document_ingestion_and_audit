@@ -2,6 +2,7 @@ import streamlit as st
 import polars as pl
 import duckdb
 import os
+import tempfile  # 🚀 Added to safely handle operating system temp directories
 
 # Import core modules
 from parser import extract_text_from_pdf
@@ -10,6 +11,7 @@ from pipeline import process_extracted_invoice_to_table
 
 st.set_page_config(page_title="Enterprise Invoice Ingestion MVP", layout="wide")
 
+# --- HYPER-SECURE PRODUCTION UI: REMOVE STREAMLIT HEADER & COLLAPSE TOP GAP ---
 st.markdown(
     """
     <style>
@@ -31,18 +33,16 @@ st.markdown(
     }
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True  # ✅ RESTORED: This prevents the TypeError you saw on screen
 )
 
 st.title("📑 AI Document Ingestion & Audit Platform")
 st.subheader("Dashboard — Human-in-the-Loop Console")
 st.markdown("---")
 
-db_path = os.path.join("data", "invoice_warehouse.db")
-upload_dir = os.path.join("data", "raw_synthetic")
 
 # --- INITIALIZE DATABASE SCHEMA ---
-# In a web-deployed app, using an in-memory connection ensures multi-tenant threads don't lock each other out
+# Using an in-memory connection ensures multi-tenant threads don't lock each other out on the server
 @st.cache_resource
 def get_db_connection():
     # 'st.cache_resource' shares this single, persistent connection thread-safely across all visiting users
@@ -59,11 +59,14 @@ def get_db_connection():
         )
     """)
     return conn
+
 conn = get_db_connection()
+
 # --- STREAMLIT SESSION STATE MEMORY ---
 # Keep track of which files were processed in the CURRENT active upload batch
 if "current_batch_files" not in st.session_state:
     st.session_state.current_batch_files = []
+
 
 # --- SIDEBAR: DYNAMIC FILE UPLOADER ---
 st.sidebar.header("📥 Upload New Invoices")
@@ -76,13 +79,17 @@ uploaded_files = st.sidebar.file_uploader(
 
 if uploaded_files:
     if st.sidebar.button("🚀 Process Uploaded Files", use_container_width=True):
-        os.makedirs(upload_dir, exist_ok=True)
         
         # CLEAR previous session history so the view refreshes to blank for this new run
         new_batch_list = []
         
+        # Get the OS-native, secure temp directory path allocated to our cloud container container
+        temp_dir = tempfile.gettempdir()
+        
         for uploaded_file in uploaded_files:
-            target_path = os.path.join(upload_dir, uploaded_file.name)
+            # 🚀 FIXED: Create path dynamically inside the safe system temporary directory
+            target_path = os.path.join(temp_dir, uploaded_file.name)
+            
             with open(target_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
                 
@@ -111,6 +118,10 @@ if uploaded_files:
                     st.sidebar.error(f"❌ Extraction error on: {uploaded_file.name}")
             except Exception as e:
                 st.sidebar.error(f"⚠️ Pipeline fault: {str(e)}")
+            finally:
+                # 🚀 HOUSEKEEPING: Delete file out of temp memory immediately after running to conserve space
+                if os.path.exists(target_path):
+                    os.remove(target_path)
         
         # Commit the names of only the freshly processed files to the view state memory
         st.session_state.current_batch_files = new_batch_list
@@ -183,5 +194,3 @@ if not query_df.is_empty():
         st.sidebar.success("🎉 Current batch is completely clear! Zero audit exceptions remain.")
 else:
     st.info("The active workspace workspace is currently empty. Drop fresh vendor invoice PDFs into the sidebar uploader above to trigger the high-speed extraction engine!")
-
-# conn.close()
