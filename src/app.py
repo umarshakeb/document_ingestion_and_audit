@@ -10,6 +10,24 @@ from pipeline import process_extracted_invoice_to_table
 
 st.set_page_config(page_title="Enterprise Invoice Ingestion MVP", layout="wide")
 
+st.markdown(
+    """
+    <style>
+    /* Hide the entire top header bar including GitHub link, Star button, and deploy menu */
+    header[data-testid="stHeader"] {
+        visibility: hidden;
+        height: 0%;
+    }
+    /* Optional: Clean up top padding spacing once header is removed */
+    .block-container {
+        padding-top: 2rem;
+    }
+    </style>
+    """,
+    unsafe_allow_allowed_html=True,
+    unsafe_allow_html=True
+)
+
 st.title("📑 AI Document Ingestion & Audit Platform")
 st.subheader("Dashboard — Human-in-the-Loop Console")
 st.markdown("---")
