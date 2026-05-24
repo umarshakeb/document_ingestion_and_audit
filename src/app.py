@@ -42,24 +42,23 @@ db_path = os.path.join("data", "invoice_warehouse.db")
 upload_dir = os.path.join("data", "raw_synthetic")
 
 # --- INITIALIZE DATABASE SCHEMA ---
+# In a web-deployed app, using an in-memory connection ensures multi-tenant threads don't lock each other out
+@st.cache_resource
 def get_db_connection():
-    conn = duckdb.connect(db_path)
-    tables = conn.execute("SHOW TABLES").fetchall()
-    table_names = [t[0] for t in tables]
+    # 'st.cache_resource' shares this single, persistent connection thread-safely across all visiting users
+    conn = duckdb.connect(database=':memory:', read_only=False)
     
-    if "invoice_ledger" not in table_names:
-        conn.execute("""
-            CREATE TABLE invoice_ledger (
-                invoice_id VARCHAR, vendor_name VARCHAR, invoice_date DATE, 
-                po_reference VARCHAR, item_code VARCHAR, description VARCHAR, 
-                quantity INTEGER, unit_price DOUBLE, extracted_total DOUBLE, 
-                verified_total DOUBLE, calculation_anomaly BOOLEAN, 
-                source_filename VARCHAR, review_status VARCHAR, auditor_notes VARCHAR
-            )
-        """)
+    # Initialize the ledger table schema cleanly
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS invoice_ledger (
+            invoice_id VARCHAR, vendor_name VARCHAR, invoice_date DATE, 
+            po_reference VARCHAR, item_code VARCHAR, description VARCHAR, 
+            quantity INTEGER, unit_price DOUBLE, extracted_total DOUBLE, 
+            verified_total DOUBLE, calculation_anomaly BOOLEAN, 
+            source_filename VARCHAR, review_status VARCHAR, auditor_notes VARCHAR
+        )
+    """)
     return conn
-
-conn = get_db_connection()
 
 # --- STREAMLIT SESSION STATE MEMORY ---
 # Keep track of which files were processed in the CURRENT active upload batch
