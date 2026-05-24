@@ -78,54 +78,59 @@ uploaded_files = st.sidebar.file_uploader(
 )
 
 if uploaded_files:
-    if st.sidebar.button("🚀 Process Uploaded Files", use_container_width=True):
-        
-        # CLEAR previous session history so the view refreshes to blank for this new run
-        new_batch_list = []
-        
-        # Get the OS-native, secure temp directory path allocated to our cloud container container
-        temp_dir = tempfile.gettempdir()
-        
-        for uploaded_file in uploaded_files:
-            # 🚀 FIXED: Create path dynamically inside the safe system temporary directory
-            target_path = os.path.join(temp_dir, uploaded_file.name)
+    # 🔒 Enterprise Hard-Limit: Protect API from resource exhaustion abuse
+    if len(uploaded_files) > 5:
+        st.sidebar.error("⚠️ Security Restriction: You can only process up to 5 files at a time in the public demo.")
+    else:
+        # Only render the button and run the loop if they pass the security filter
+        if st.sidebar.button("🚀 Process Uploaded Files", use_container_width=True):
             
-            with open(target_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-                
-            st.sidebar.info(f"Analyzing {uploaded_file.name}...")
+            # CLEAR previous session history so the view refreshes to blank for this new run
+            new_batch_list = []
             
-            try:
-                parsed_doc = extract_text_from_pdf(target_path)
-                extracted_json = extract_structured_data_from_text(parsed_doc["raw_content"])
+            # Get the OS-native, secure temp directory path allocated to our cloud container container
+            temp_dir = tempfile.gettempdir()
+            
+            for uploaded_file in uploaded_files:
+                # Create path dynamically inside the safe system temporary directory
+                target_path = os.path.join(temp_dir, uploaded_file.name)
                 
-                if extracted_json and extracted_json.get("line_items"):
-                    invoice_df = process_extracted_invoice_to_table(extracted_json)
-                    invoice_df = invoice_df.with_columns([
-                        pl.lit(uploaded_file.name).alias("source_filename"),
-                        pl.lit("Pending Review").alias("review_status"),
-                        pl.lit("").alias("auditor_notes")
-                    ])
+                with open(target_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
                     
-                    # Deduplicate: Remove previous logs of this file from the DB before re-inserting
-                    conn.execute("DELETE FROM invoice_ledger WHERE source_filename = ?", (uploaded_file.name,))
+                st.sidebar.info(f"Analyzing {uploaded_file.name}...")
+                
+                try:
+                    parsed_doc = extract_text_from_pdf(target_path)
+                    extracted_json = extract_structured_data_from_text(parsed_doc["raw_content"])
                     
-                    # Append rows directly to the database
-                    conn.execute("INSERT INTO invoice_ledger SELECT * FROM invoice_df")
-                    new_batch_list.append(uploaded_file.name)
-                    st.sidebar.success(f"✅ Ingested: {uploaded_file.name}")
-                else:
-                    st.sidebar.error(f"❌ Extraction error on: {uploaded_file.name}")
-            except Exception as e:
-                st.sidebar.error(f"⚠️ Pipeline fault: {str(e)}")
-            finally:
-                # 🚀 HOUSEKEEPING: Delete file out of temp memory immediately after running to conserve space
-                if os.path.exists(target_path):
-                    os.remove(target_path)
-        
-        # Commit the names of only the freshly processed files to the view state memory
-        st.session_state.current_batch_files = new_batch_list
-        st.rerun()
+                    if extracted_json and extracted_json.get("line_items"):
+                        invoice_df = process_extracted_invoice_to_table(extracted_json)
+                        invoice_df = invoice_df.with_columns([
+                            pl.lit(uploaded_file.name).alias("source_filename"),
+                            pl.lit("Pending Review").alias("review_status"),
+                            pl.lit("").alias("auditor_notes")
+                        ])
+                        
+                        # Deduplicate: Remove previous logs of this file from the DB before re-inserting
+                        conn.execute("DELETE FROM invoice_ledger WHERE source_filename = ?", (uploaded_file.name,))
+                        
+                        # Append rows directly to the database
+                        conn.execute("INSERT INTO invoice_ledger SELECT * FROM invoice_df")
+                        new_batch_list.append(uploaded_file.name)
+                        st.sidebar.success(f"✅ Ingested: {uploaded_file.name}")
+                    else:
+                        st.sidebar.error(f"❌ Extraction error on: {uploaded_file.name}")
+                except Exception as e:
+                    st.sidebar.error(f"⚠️ Pipeline fault: {str(e)}")
+                finally:
+                    # Housekeeping: Delete file out of temp memory immediately after running to conserve space
+                    if os.path.exists(target_path):
+                        os.remove(target_path)
+            
+            # Commit the names of only the freshly processed files to the view state memory
+            st.session_state.current_batch_files = new_batch_list
+            st.rerun()
 
 
 # --- FETCH DATA SCOPED TO CURRENT ACTIVE UPLOADS ---
