@@ -13,18 +13,24 @@ st.set_page_config(page_title="Enterprise Invoice Ingestion MVP", layout="wide")
 st.markdown(
     """
     <style>
-    /* Hide the entire top header bar including GitHub link, Star button, and deploy menu */
-    header[data-testid="stHeader"] {
-        visibility: hidden;
-        height: 0%;
+    /* 1. Completely hide the default Streamlit container header elements */
+    [data-testid="stHeader"] {
+        display: none !important;
+        height: 0px !important;
     }
-    /* Optional: Clean up top padding spacing once header is removed */
+    
+    /* 2. Strip off the default forced top margin/padding from the application viewport wrapper */
+    .stAppDeployButton {
+        display: none !important;
+    }
+    
+    /* 3. Pull the main dashboard view body layout all the way to the top margin boundary */
     .block-container {
-        padding-top: 2rem;
+        padding-top: 0rem !important;
+        margin-top: 0rem !important;
     }
     </style>
     """,
-    unsafe_allow_allowed_html=True,
     unsafe_allow_html=True
 )
 
