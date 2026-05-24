@@ -8,3 +8,4 @@ pypdf
 duckdb
 groq
 pandas
+python-dotenv
