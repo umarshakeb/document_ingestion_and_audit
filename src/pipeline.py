@@ -2,56 +2,76 @@ import polars as pl
 import json
 import os
 
+
 def process_extracted_invoice_to_table(extracted_json: dict) -> pl.DataFrame:
     """
-    Takes raw dictionary output from our extraction agent, normalizes 
-    nested line-item structures, cleans formatting anomalies, and returns 
-    a highly optimized Polars DataFrame.
+    Transforms raw JSON extraction envelopes into structured Polars rows,
+    calculates full line-item matrix aggregates, and cross-references them
+    against the invoice's declared subtotal to detect corporate billing anomalies.
     """
-    if not extracted_json or "line_items" not in extracted_json:
-        print("[WARNING] Empty payload received or line items missing.")
+    line_items = extracted_json.get("line_items", [])
+    if not line_items:
         return pl.DataFrame()
-
-    # Extract base metadata fields
+        
+    # 1. Parse the extracted dictionary metadata keys
     invoice_id = extracted_json.get("invoice_id", "UNKNOWN")
     vendor_name = extracted_json.get("vendor_name", "UNKNOWN")
-    invoice_date = extracted_json.get("invoice_date", "UNKNOWN")
-    po_ref = extracted_json.get("po_reference", "UNKNOWN")
+    invoice_date = extracted_json.get("invoice_date", None)
+    po_reference = extracted_json.get("po_reference", "UNKNOWN")
+    declared_subtotal = float(extracted_json.get("declared_subtotal", 0.0))
     
-    line_items_list = extracted_json["line_items"]
+    # 2. Convert raw line item lists into a Polars DataFrame
+    df = pl.DataFrame(line_items)
     
-    # Flatten the JSON list into a flat list of dictionaries for tabular loading
-    flattened_rows = []
-    for item in line_items_list:
-        row = {
-            "invoice_id": invoice_id,
-            "vendor_name": vendor_name,
-            "invoice_date": invoice_date,
-            "po_reference": po_ref,
-            "item_code": item.get("item_code", "").strip(),
-            "description": item.get("description", ""),
-            "quantity": int(item.get("quantity", 0)),
-            "unit_price": float(item.get("unit_price", 0.0)),
-            "extracted_total": float(item.get("total_amount", 0.0))
-        }
-        flattened_rows.append(row)
-        
-    # Convert instantly to a Polars DataFrame
-    df = pl.DataFrame(flattened_rows)
-    
-    # --- Polars Optimization & Data Sanitization ---
-    # 1. Cast data types clearly and compute verified totals programmatically 
+    # Ensure standard schema column datatypes are enforced cleanly
     df = df.with_columns([
-        pl.col("invoice_date").str.to_date(format="%Y-%m-%d", strict=False),
-        (pl.col("quantity") * pl.col("unit_price")).round(2).alias("verified_total")
+        pl.col("quantity").cast(pl.Int64, strict=False).fill_null(0),
+        pl.col("unit_price").cast(pl.Float64, strict=False).fill_null(0.0),
+        pl.col("total_amount").cast(pl.Float64, strict=False).fill_null(0.0)
     ])
     
-    # 2. Add an anomaly flag if the LLM's extracted calculation disagrees with programmatic math
+    # 3. Perform granular data engineering validations using Polars expressions
+    # Calculate what the true line total SHOULD be
     df = df.with_columns(
-        (pl.col("extracted_total") != pl.col("verified_total")).alias("calculation_anomaly")
+        (pl.col("quantity") * pl.col("unit_price")).round(2).alias("calculated_line_total")
     )
     
-    return df
+    # Calculate the grand sum total of all lines processed in this single document invoice container
+    calculated_subtotal_sum = df.select(pl.col("total_amount").sum()).item()
+    calculated_subtotal_sum = round(float(calculated_subtotal_sum), 2)
+    
+    # 4. Apply Multi-Layered Audit Anomaly Flags
+    # Trigger an alert if:
+    #   A) Any single line item's arithmetic is wrong OR
+    #   B) The sum of all items doesn't match the stated subtotal on the document invoice header
+    df = df.with_columns([
+        pl.lit(invoice_id).alias("invoice_id"),
+        pl.lit(vendor_name).alias("vendor_name"),
+        pl.lit(invoice_date).alias("invoice_date"),
+        pl.lit(po_reference).alias("po_reference"),
+        pl.lit(declared_subtotal).alias("extracted_subtotal"),
+        pl.lit(calculated_subtotal_sum).alias("verified_subtotal_sum"),
+        
+        # Core conditional anomaly flag assignment expression
+        pl.when(
+            (pl.col("total_amount") != pl.col("calculated_line_total")) | 
+            (pl.lit(declared_subtotal) != pl.lit(calculated_subtotal_sum))
+        )
+        .then(True)
+        .else_(False)
+        .alias("calculation_anomaly")
+    ])
+    
+    # Rearrange column positioning sequence for dashboard layout rendering
+    final_column_order = [
+        "invoice_id", "vendor_name", "invoice_date", "po_reference", 
+        "item_code", "description", "quantity", "unit_price", "total_amount", 
+        "extracted_subtotal", "verified_subtotal_sum", "calculation_anomaly"
+    ]
+    
+    # Dynamic structural selection safely checking for column existence variations
+    existing_columns = [col for col in final_column_order if col in df.columns]
+    return df.select(existing_columns)
 
 def save_dataframe_outputs(df: pl.DataFrame, output_base_name: str):
     """Saves structured data arrays out to enterprise formats safely."""
