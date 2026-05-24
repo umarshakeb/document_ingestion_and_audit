@@ -1,0 +1,16 @@
+.env
+venv
+venv/
+venv/Lib/
+venv/Scripts/
+src/__pycache__/
+*.pyc
+__pycache__/
+
+
+*.db
+*.db.wal
+
+data/processed_output/
+
+src/agent_v1.py

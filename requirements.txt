@@ -1,0 +1,10 @@
+polars
+streamlit
+langfuse
+reportlab
+faker
+pydantic
+pypdf
+duckdb
+groq
+pandas
