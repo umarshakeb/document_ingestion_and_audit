@@ -78,10 +78,7 @@ uploaded_files = st.sidebar.file_uploader(
 )
 
 if uploaded_files:
-    if len(uploaded_files) > 2:
-        st.sidebar.error("⚠️ Security Restriction: You can only process up to 2 files at a time in the public demo.")
-    else:
-        st.sidebar.button("🚀 Process Uploaded Files", use_container_width=True)
+    if st.sidebar.button("🚀 Process Uploaded Files", use_container_width=True):
         
         # CLEAR previous session history so the view refreshes to blank for this new run
         new_batch_list = []
