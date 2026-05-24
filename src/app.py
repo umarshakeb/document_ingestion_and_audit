@@ -59,7 +59,7 @@ def get_db_connection():
         )
     """)
     return conn
-
+conn = get_db_connection()
 # --- STREAMLIT SESSION STATE MEMORY ---
 # Keep track of which files were processed in the CURRENT active upload batch
 if "current_batch_files" not in st.session_state:
