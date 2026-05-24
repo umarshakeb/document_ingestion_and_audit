@@ -7,9 +7,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import core modules
-from src.parser import extract_text_from_pdf
-from src.agent import extract_structured_data_from_text
-from src.pipeline import process_extracted_invoice_to_table
+# Import core modules from the local folder context
+import parser
+import agent
+import pipeline
+
+# Extract the required pipeline entry-point execution methods
+extract_text_from_pdf = parser.extract_text_from_pdf
+extract_structured_data_from_text = agent.extract_structured_data_from_text
+process_extracted_invoice_to_table = pipeline.process_extracted_invoice_to_table
 
 st.set_page_config(page_title="Enterprise Invoice Ingestion MVP", layout="wide")
 
