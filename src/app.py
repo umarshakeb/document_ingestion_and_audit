@@ -184,4 +184,4 @@ if not query_df.is_empty():
 else:
     st.info("The active workspace workspace is currently empty. Drop fresh vendor invoice PDFs into the sidebar uploader above to trigger the high-speed extraction engine!")
 
-conn.close()
+# conn.close()
